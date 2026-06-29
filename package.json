@@ -1,0 +1,20 @@
+{
+  "name": "gql",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "gen-gql": "tsx scripts/gen-gql.ts",
+    "codegen": "graphql-codegen --config codegen.ts",
+    "codegen:watch": "graphql-codegen --watch --config codegen.ts"
+  },
+  "devDependencies": {
+    "@graphql-codegen/cli": "^7.1.3",
+    "@graphql-codegen/introspection": "^6.0.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.0"
+  }
+}
