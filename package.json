@@ -1,12 +1,12 @@
 {
-  "name": "@yonus-a/gqlx",
+  "name": "@yonus_amire01/gqlx",
   "version": "1.0.0",
   "description": "Prisma-style, codegen-driven GraphQL client. No .gql files — your call site is the query.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "gqlx": "./bin/gqlx.mjs"
+    "gqlx": "bin/gqlx.mjs"
   },
   "exports": {
     ".": {
@@ -54,5 +54,17 @@
   },
   "engines": {
     "node": ">=18.17"
-  }
+  },
+  "directories": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yonus-a/gqlx.git"
+  },
+  "author": "Younes Amiri",
+  "bugs": {
+    "url": "https://github.com/yonus-a/gqlx/issues"
+  },
+  "homepage": "https://github.com/yonus-a/gqlx#readme"
 }
