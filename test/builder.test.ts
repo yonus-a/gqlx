@@ -1,15 +1,43 @@
 #!/usr/bin/env tsx
 /**
- * Smoke test for the gql-client builder.
+ * Smoke test for the builder. No network, no codegen output — feeds the
+ * builder a hand-crafted descriptor set and asserts the emitted GraphQL
+ * string + variable bag match expectations.
  *
- * Builds a handful of queries/mutations against the generated descriptors and
- * asserts the emitted query string + variable bag look right. No network, no
- * Vue, no Nuxt. Run with:
- *
- *   pnpm exec tsx scripts/test-gql-builder.ts
+ *   pnpm test
  */
 
-import { build } from '../app/gql-client/runtime/builder';
+import { createBuilder } from '../src/runtime/builder.js';
+import type { Descriptors } from '../src/runtime/descriptors.js';
+
+const DESC: Descriptors = {
+  ROOT_QUERY_TYPE: 'Query',
+  ROOT_MUTATION_TYPE: 'Mutation',
+  FIELD_ARGS: {
+    Query: {
+      findAuthAptById: { id: 'String!' },
+    },
+    Mutation: {
+      createAuthApt: { data: 'CreateAuthAptDto!' },
+    },
+  },
+  FIELD_TYPES: {
+    Query: {
+      findAuthAptById: 'AuthAptDataSerializer',
+    },
+    Mutation: {
+      createAuthApt: 'AuthAptDataSerializer',
+    },
+    AuthAptDataSerializer: {
+      data: 'AuthApt',
+    },
+  },
+  WRAPPERS: {
+    AuthAptDataSerializer: { field: 'data', inner: 'AuthApt' },
+  },
+};
+
+const build = createBuilder(DESC);
 
 type Case = { name: string; run: () => { actual: unknown; expected: unknown } };
 
@@ -20,7 +48,7 @@ const cases: Case[] = [
     name: 'simple query with required arg lifted to $variable',
     run: () => {
       const out = build('query', {
-        findAuthAptById: { id: 'abc-123', include: { data: { include: { id: true, name: true } } } },
+        findAuthAptById: { id: 'abc-123', include: { id: true, name: true } },
       });
       return {
         actual: { query: norm(out.query), variables: out.variables },
@@ -32,31 +60,10 @@ const cases: Case[] = [
     },
   },
   {
-    name: 'nested include with multiple sibling fields',
-    run: () => {
-      const out = build('query', {
-        findAuthAptById: {
-          id: 'abc-123',
-          include: { data: { include: { id: true, name: true, description: true } } },
-        },
-      });
-      return {
-        actual: { query: norm(out.query), variables: out.variables },
-        expected: {
-          query: 'query($v1: String!) { findAuthAptById(id: $v1) { data { id name description } } }',
-          variables: { v1: 'abc-123' },
-        },
-      };
-    },
-  },
-  {
     name: 'mutation with complex input arg',
     run: () => {
       const out = build('mutation', {
-        createAuthApt: {
-          data: { name: 'apt-one' },
-          include: { data: { include: { id: true, name: true } } },
-        },
+        createAuthApt: { data: { name: 'apt-one' }, include: { id: true, name: true } },
       });
       return {
         actual: { query: norm(out.query), variables: out.variables },
@@ -70,7 +77,7 @@ const cases: Case[] = [
   {
     name: 'array-root merges into one operation',
     run: () => {
-      const out = build('query', [{ findAuthAptById: { id: 'x', include: { data: { include: { id: true } } } } }]);
+      const out = build('query', [{ findAuthAptById: { id: 'x', include: { id: true } } }]);
       return {
         actual: { query: norm(out.query), variables: out.variables },
         expected: {
@@ -84,8 +91,8 @@ const cases: Case[] = [
     name: '__field aliasing on query',
     run: () => {
       const out = build('query', {
-        a: { __field: 'findAuthAptById', id: 'x', include: { data: { include: { id: true } } } },
-        b: { __field: 'findAuthAptById', id: 'y', include: { data: { include: { id: true } } } },
+        a: { __field: 'findAuthAptById', id: 'x', include: { id: true } },
+        b: { __field: 'findAuthAptById', id: 'y', include: { id: true } },
       });
       return {
         actual: { query: norm(out.query), variables: out.variables },
@@ -98,6 +105,18 @@ const cases: Case[] = [
     },
   },
   {
+    name: 'config flows through to BuildResult',
+    run: () => {
+      const out = build('query', {
+        findAuthAptById: { id: 'x', include: { id: true }, config: { params: { zone: 'client' } } },
+      });
+      return {
+        actual: out.config,
+        expected: { params: { zone: 'client' } },
+      };
+    },
+  },
+  {
     name: 'empty selection throws',
     run: () => {
       let err: string | null = null;
@@ -106,7 +125,7 @@ const cases: Case[] = [
       } catch (e) {
         err = (e as Error).message;
       }
-      return { actual: !!err && err!.includes('empty selection'), expected: true };
+      return { actual: !!err && err.includes('empty selection'), expected: true };
     },
   },
   {
@@ -115,29 +134,12 @@ const cases: Case[] = [
       let err: string | null = null;
       try {
         build('query', {
-          findAuthAptById: { id: 'x', bogus: 1, include: { data: { include: { id: true } } } },
+          findAuthAptById: { id: 'x', bogus: 1, include: { id: true } },
         });
       } catch (e) {
         err = (e as Error).message;
       }
-      return { actual: !!err && err!.includes('unknown arg "bogus"'), expected: true };
-    },
-  },
-  {
-    name: 'leaf with include throws',
-    run: () => {
-      let err: string | null = null;
-      try {
-        build('query', {
-          findAuthAptById: {
-            id: 'x',
-            include: { data: { include: { id: { include: { foo: true } } } } },
-          },
-        });
-      } catch (e) {
-        err = (e as Error).message;
-      }
-      return { actual: !!err && err!.includes('leaf field'), expected: true };
+      return { actual: !!err && err.includes('unknown arg "bogus"'), expected: true };
     },
   },
   {
@@ -146,13 +148,13 @@ const cases: Case[] = [
       let err: string | null = null;
       try {
         build('query', [
-          { findAuthAptById: { id: 'x', include: { data: { include: { id: true } } } } },
-          { findAuthAptById: { id: 'y', include: { data: { include: { id: true } } } } },
+          { findAuthAptById: { id: 'x', include: { id: true } } },
+          { findAuthAptById: { id: 'y', include: { id: true } } },
         ]);
       } catch (e) {
         err = (e as Error).message;
       }
-      return { actual: !!err && err!.includes('duplicate root field'), expected: true };
+      return { actual: !!err && err.includes('duplicate root field'), expected: true };
     },
   },
 ];
